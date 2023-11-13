@@ -3,22 +3,23 @@ package main
 import (
 	"github.com/yushikuann/go-raft-sdk/node"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 )
 
 func main() {
-	//ports := os.Args[2]
-	//myPort, _ := strconv.Atoi(os.Args[1])
-	//nodeID, _ := strconv.Atoi(os.Args[3])
-	//heartBeatInterval, _ := strconv.Atoi(os.Args[4])
-	//electionTimeout, _ := strconv.Atoi(os.Args[5])
+	ports := os.Args[2]
+	myPort, _ := strconv.Atoi(os.Args[1])
+	nodeID, _ := strconv.Atoi(os.Args[3])
+	heartBeatInterval, _ := strconv.Atoi(os.Args[4])
+	electionTimeout, _ := strconv.Atoi(os.Args[5])
 
-	ports := "10001,10002,10003"
-	myPort := 10001
-	nodeID := 1
-	heartBeatInterval := 100
-	electionTimeout := 100
+	//ports := "10001,10002,10003"
+	//myPort := 10001
+	//nodeID := 1
+	//heartBeatInterval := 100
+	//electionTimeout := 100
 
 	portStrings := strings.Split(ports, ",")
 
