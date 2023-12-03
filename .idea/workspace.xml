@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ea4bf6ed-90f6-488d-ba96-a3a691c9a6f6" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/node/raft.go" beforeDir="false" afterPath="$PROJECT_DIR$/node/raft.go" afterDir="false" />
-    </list>
+    <list default="true" id="ea4bf6ed-90f6-488d-ba96-a3a691c9a6f6" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -94,12 +91,12 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/node/raft.go</url>
-          <line>190</line>
+          <line>191</line>
           <option name="timeStamp" value="4" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/node/raft.go</url>
-          <line>192</line>
+          <line>193</line>
           <option name="timeStamp" value="5" />
         </line-breakpoint>
       </breakpoints>

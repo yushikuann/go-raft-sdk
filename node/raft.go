@@ -134,12 +134,13 @@ func (rn *raftNode) setVotedFor(candidateId int32) {
 // nodeId: the id of this node
 // heartBeatInterval: the Heart Beat Interval when this node becomes leader. In millisecond.
 // electionTimeout: The election timeout for this node. In millisecond.
-func NewRaftNode(myport int, nodeidPortMap map[int]int, nodeId, heartBeatInterval,
+func NewRaftNode(
+	myPort int,
+	nodeIdPortMap map[int]int,
+	nodeId, heartBeatInterval,
 	electionTimeout int) (raft.RaftNodeServer, error) {
-	// TODO: Implement this!
 
-	//remove myself in the hostmap
-	delete(nodeidPortMap, nodeId)
+	delete(nodeIdPortMap, nodeId)
 
 	//a map for {node id, gRPCClient}
 	hostConnectionMap := make(map[int32]raft.RaftNodeClient)
@@ -157,8 +158,8 @@ func NewRaftNode(myport int, nodeidPortMap map[int]int, nodeId, heartBeatInterva
 		votedFor:                -1,
 		kvStore:                 make(map[string]int32),
 		commitIndex:             0,
-		nextIndex:               make([]int32, len(nodeidPortMap)+1),
-		matchIndex:              make([]int32, len(nodeidPortMap)+1),
+		nextIndex:               make([]int32, len(nodeIdPortMap)+1),
+		matchIndex:              make([]int32, len(nodeIdPortMap)+1),
 		stopCurElection:         make(chan bool),
 		waitingOp:               make(map[int32]chan bool),
 	}
@@ -168,7 +169,7 @@ func NewRaftNode(myport int, nodeidPortMap map[int]int, nodeId, heartBeatInterva
 		rn.matchIndex[i] = 0
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", myport))
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", myPort))
 
 	if err != nil {
 		log.Println("Fail to listen port", err)
@@ -178,11 +179,11 @@ func NewRaftNode(myport int, nodeidPortMap map[int]int, nodeId, heartBeatInterva
 	s := grpc.NewServer()
 	raft.RegisterRaftNodeServer(s, &rn)
 
-	log.Printf("Start listening to port: %d", myport)
+	log.Printf("Start listening to port: %d", myPort)
 	go s.Serve(l)
 
 	//Try to connect nodes
-	for tmpHostId, hostPorts := range nodeidPortMap {
+	for tmpHostId, hostPorts := range nodeIdPortMap {
 		hostId := int32(tmpHostId)
 		numTry := 0
 		for {
@@ -201,7 +202,7 @@ func NewRaftNode(myport int, nodeidPortMap map[int]int, nodeId, heartBeatInterva
 			}
 		}
 	}
-	log.Printf("[%d]: Successfully connect all nodes", myport)
+	log.Printf("[%d]: Successfully connect all nodes", myPort)
 
 	//TODO: kick off leader election here !
 	go rn.ElectionTicker(electionTimeout)
