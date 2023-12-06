@@ -2,7 +2,8 @@ package node
 
 import (
 	"context"
-	"github.com/yushikuann/go-raft-sdk/raft"
+	"fmt"
+	"github.com/yushikuann/go-raft-sdk/proto/raft_pfb"
 	"log"
 	"math/rand"
 	"sync"
@@ -21,9 +22,9 @@ func printf(format string, a ...interface{}) (n int, err error) {
 
 type raftNode struct {
 	// Generic info
-	peers    map[int32]raft.RaftNodeClient
+	peers    map[int32]raft_pfb.RaftNodeClient
 	myId     int32
-	role     raft.Role
+	role     raft_pfb.Role
 	mu       sync.Mutex
 	leaderId int32
 
@@ -37,7 +38,7 @@ type raftNode struct {
 	// Persistent state on all servers
 	currentTerm int32
 	votedFor    int32
-	log         []*raft.LogEntry
+	log         []*raft_pfb.LogEntry
 
 	// kv store
 	kvStore map[string]int32
@@ -54,17 +55,17 @@ type raftNode struct {
 	waitingOp      map[int32]chan bool
 	// for candidate
 	stopCurElection chan bool
-	raft.UnimplementedRaftNodeServer
+	raft_pfb.UnimplementedRaftNodeServer
 }
 
-func (rn *raftNode) getRole() raft.Role {
+func (rn *raftNode) getRole() raft_pfb.Role {
 	rn.mu.Lock()
 	role := rn.role
 	rn.mu.Unlock()
 	return role
 }
 
-func (rn *raftNode) setRole(role raft.Role) {
+func (rn *raftNode) setRole(role raft_pfb.Role) {
 	rn.mu.Lock()
 	rn.role = role
 	rn.mu.Unlock()
@@ -120,22 +121,22 @@ func (rn *raftNode) run() {
 	for {
 		role := rn.getRole()
 		switch role {
-		case raft.Role_Follower:
+		case raft_pfb.Role_Follower:
 			rn.HandleFollower()
-		case raft.Role_Candidate:
+		case raft_pfb.Role_Candidate:
 			rn.HandleCandidate()
-		case raft.Role_Leader:
+		case raft_pfb.Role_Leader:
 			rn.HandleLeader()
 		}
 	}
 }
 
 func (rn *raftNode) HandleFollower() {
-	// empty
+	fmt.Println("Follower Running")
 }
 
 func (rn *raftNode) HandleCandidate() {
-	// empty
+	fmt.Println("Candidate Running")
 }
 
 func (rn *raftNode) HandleLeader() {
@@ -147,17 +148,17 @@ func (rn *raftNode) HandleLeader() {
 
 	quorumSize := (len(rn.peers)+1)/2 + 1
 
-	respCh := make(chan *raft.AppendEntriesReply, len(rn.peers))
+	respCh := make(chan *raft_pfb.AppendEntriesReply, len(rn.peers))
 	rn.notifyHearBeat = make(chan bool, 1)
 	rn.resetCurHeartBeatTicker <- true
 	rn.notifyHearBeat <- true
-	for rn.getRole() == raft.Role_Leader {
+	for rn.getRole() == raft_pfb.Role_Leader {
 		select {
 		case <-rn.notifyHearBeat:
 			go rn.sendHeartBeat(respCh)
 		case reply := <-respCh:
 			if reply.Term > rn.getCurrentTerm() {
-				rn.setRole(raft.Role_Follower)
+				rn.setRole(raft_pfb.Role_Follower)
 				rn.setCurrentTerm(reply.Term)
 				rn.setVotedFor(-1)
 				return
@@ -188,7 +189,7 @@ func (rn *raftNode) HandleLeader() {
 				for i := startCommitId + 1; i <= endCommitId; i++ {
 					status := false
 					logEntry := rn.log[i]
-					if logEntry.Op == raft.Operation_Put {
+					if logEntry.Op == raft_pfb.Operation_Put {
 						rn.kvStore[logEntry.Key] = logEntry.Value
 						status = true
 					} else {
@@ -208,7 +209,7 @@ func (rn *raftNode) HandleLeader() {
 
 func (rn *raftNode) StartLeaderElection() {
 	// response channel
-	respCh := make(chan *raft.RequestVoteReply, len(rn.peers))
+	respCh := make(chan *raft_pfb.RequestVoteReply, len(rn.peers))
 
 	rn.setCurrentTerm(rn.getCurrentTerm() + 1)
 	currentTerm := rn.getCurrentTerm()
@@ -216,8 +217,8 @@ func (rn *raftNode) StartLeaderElection() {
 
 	for nodeId, peer := range rn.peers {
 
-		go func(nodeId int32, client raft.RaftNodeClient) {
-			request := raft.RequestVoteArgs{
+		go func(nodeId int32, client raft_pfb.RaftNodeClient) {
+			request := raft_pfb.RequestVoteArgs{
 				From:         rn.myId,
 				To:           nodeId,
 				Term:         currentTerm,
@@ -236,11 +237,11 @@ func (rn *raftNode) StartLeaderElection() {
 	rn.setVotedFor(rn.myId)
 	atomic.AddInt32(&grantedVotes, 1)
 
-	for rn.getRole() == raft.Role_Candidate {
+	for rn.getRole() == raft_pfb.Role_Candidate {
 		select {
 		case reply := <-respCh:
 			if reply.Term > rn.getCurrentTerm() {
-				rn.setRole(raft.Role_Follower)
+				rn.setRole(raft_pfb.Role_Follower)
 				rn.setCurrentTerm(reply.Term)
 				rn.setVotedFor(-1)
 				return
@@ -249,7 +250,7 @@ func (rn *raftNode) StartLeaderElection() {
 			if reply.VoteGranted {
 				atomic.AddInt32(&grantedVotes, 1)
 				if int(grantedVotes) >= quorumSize {
-					rn.setRole(raft.Role_Leader)
+					rn.setRole(raft_pfb.Role_Leader)
 					return
 				}
 			}
@@ -259,15 +260,15 @@ func (rn *raftNode) StartLeaderElection() {
 	}
 }
 
-func (rn *raftNode) sendHeartBeat(respCh chan *raft.AppendEntriesReply) {
+func (rn *raftNode) sendHeartBeat(respCh chan *raft_pfb.AppendEntriesReply) {
 	currentTerm := rn.getCurrentTerm()
 	commitIndex := rn.getCommitIndex()
 
 	for nodeId, peer := range rn.peers {
 
-		go func(nodeId int32, client raft.RaftNodeClient) {
+		go func(nodeId int32, client raft_pfb.RaftNodeClient) {
 			prevLogEntry := rn.log[rn.nextIndex[nodeId]-1]
-			EntryArgs := raft.AppendEntriesArgs{
+			EntryArgs := raft_pfb.AppendEntriesArgs{
 				From:         rn.myId,
 				To:           nodeId,
 				Term:         currentTerm,
@@ -298,15 +299,15 @@ func (rn *raftNode) sendHeartBeat(respCh chan *raft.AppendEntriesReply) {
 // Params:
 // args: the operation to propose
 // reply: as specified in Desc
-func (rn *raftNode) Propose(ctx context.Context, args *raft.ProposeArgs) (*raft.ProposeReply, error) {
+func (rn *raftNode) Propose(ctx context.Context, args *raft_pfb.ProposeArgs) (*raft_pfb.ProposeReply, error) {
 	// TODO: Implement this!
 	log.Printf("[%d] Receive propose from client: %v", rn.myId, *args)
-	var ret raft.ProposeReply
+	var ret raft_pfb.ProposeReply
 	ret.CurrentLeader = rn.leaderId
-	if rn.getRole() != raft.Role_Leader {
-		ret.Status = raft.Status_WrongNode
+	if rn.getRole() != raft_pfb.Role_Leader {
+		ret.Status = raft_pfb.Status_WrongNode
 	} else {
-		logEntry := raft.LogEntry{
+		logEntry := raft_pfb.LogEntry{
 			Term:  rn.getCurrentTerm(),
 			Op:    args.Op,
 			Key:   args.Key,
@@ -319,9 +320,9 @@ func (rn *raftNode) Propose(ctx context.Context, args *raft.ProposeArgs) (*raft.
 		select {
 		case status := <-rn.waitingOp[waitId]:
 			if status {
-				ret.Status = raft.Status_OK
+				ret.Status = raft_pfb.Status_OK
 			} else {
-				ret.Status = raft.Status_KeyNotFound
+				ret.Status = raft_pfb.Status_KeyNotFound
 			}
 		}
 	}
@@ -336,15 +337,15 @@ func (rn *raftNode) Propose(ctx context.Context, args *raft.ProposeArgs) (*raft.
 // Params:
 // args: the key to check
 // reply: the value and status for this lookup of the given key
-func (rn *raftNode) GetValue(ctx context.Context, args *raft.GetValueArgs) (*raft.GetValueReply, error) {
+func (rn *raftNode) GetValue(ctx context.Context, args *raft_pfb.GetValueArgs) (*raft_pfb.GetValueReply, error) {
 	// TODO: Implement this!
-	var ret raft.GetValueReply
+	var ret raft_pfb.GetValueReply
 	v, success := rn.kvStore[args.Key]
 	if success {
 		ret.V = v
-		ret.Status = raft.Status_KeyFound
+		ret.Status = raft_pfb.Status_KeyFound
 	} else {
-		ret.Status = raft.Status_KeyNotFound
+		ret.Status = raft_pfb.Status_KeyNotFound
 	}
 	return &ret, nil
 }
@@ -356,10 +357,10 @@ func (rn *raftNode) GetValue(ctx context.Context, args *raft.GetValueArgs) (*raf
 // args: the RequestVote Message, you must include From(src node id) and To(dst node id) when
 // you call this API
 // reply: the RequestVote Reply Message
-func (rn *raftNode) RequestVote(ctx context.Context, args *raft.RequestVoteArgs) (*raft.RequestVoteReply, error) {
+func (rn *raftNode) RequestVote(ctx context.Context, args *raft_pfb.RequestVoteArgs) (*raft_pfb.RequestVoteReply, error) {
 	// TODO: Implement this!
 	currentTerm := rn.getCurrentTerm()
-	reply := raft.RequestVoteReply{
+	reply := raft_pfb.RequestVoteReply{
 		From:        args.To,
 		To:          args.From,
 		Term:        currentTerm,
@@ -371,7 +372,7 @@ func (rn *raftNode) RequestVote(ctx context.Context, args *raft.RequestVoteArgs)
 	}
 
 	if args.Term > currentTerm {
-		rn.setRole(raft.Role_Follower)
+		rn.setRole(raft_pfb.Role_Follower)
 		rn.setCurrentTerm(args.Term)
 		rn.setVotedFor(-1)
 		reply.Term = args.Term
@@ -399,10 +400,10 @@ func (rn *raftNode) RequestVote(ctx context.Context, args *raft.RequestVoteArgs)
 // args: the AppendEntries Message, you must include From(src node id) and To(dst node id) when
 // you call this API
 // reply: the AppendEntries Reply Message
-func (rn *raftNode) AppendEntries(ctx context.Context, args *raft.AppendEntriesArgs) (*raft.AppendEntriesReply, error) {
+func (rn *raftNode) AppendEntries(ctx context.Context, args *raft_pfb.AppendEntriesArgs) (*raft_pfb.AppendEntriesReply, error) {
 	// TODO: Implement this
 	currentTerm := rn.getCurrentTerm()
-	reply := raft.AppendEntriesReply{
+	reply := raft_pfb.AppendEntriesReply{
 		From:       args.To,
 		To:         args.From,
 		Term:       currentTerm,
@@ -417,8 +418,8 @@ func (rn *raftNode) AppendEntries(ctx context.Context, args *raft.AppendEntriesA
 	rn.resetCurElectionTicker <- true
 	rn.leaderId = args.LeaderId
 
-	if (args.Term > currentTerm) || (rn.getRole() != raft.Role_Follower) {
-		rn.setRole(raft.Role_Follower)
+	if (args.Term > currentTerm) || (rn.getRole() != raft_pfb.Role_Follower) {
+		rn.setRole(raft_pfb.Role_Follower)
 		rn.setCurrentTerm(args.Term)
 		rn.setVotedFor(-1)
 		reply.Term = args.Term
@@ -453,7 +454,7 @@ func (rn *raftNode) AppendEntries(ctx context.Context, args *raft.AppendEntriesA
 		printf(">>> [%d] comit from %d to %d, logs: %v", rn.myId, startCommitId, endCommitId, rn.log)
 		for i := startCommitId + 1; i <= endCommitId; i++ {
 			logEntry := rn.log[i]
-			if logEntry.Op == raft.Operation_Put {
+			if logEntry.Op == raft_pfb.Operation_Put {
 				rn.kvStore[logEntry.Key] = logEntry.Value
 			} else {
 				delete(rn.kvStore, logEntry.Key)
@@ -468,8 +469,8 @@ func (rn *raftNode) AppendEntries(ctx context.Context, args *raft.AppendEntriesA
 
 func (rn *raftNode) RandomElectionTimeout(electionTimeoutTime int) time.Duration {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	rand_time := r.Intn(90) // electionTimeoutTime)
-	timeout := time.Duration(electionTimeoutTime+rand_time) * time.Millisecond
+	randTime := r.Intn(90) // electionTimeoutTime)
+	timeout := time.Duration(electionTimeoutTime+randTime) * time.Millisecond
 	return timeout
 }
 
@@ -483,9 +484,9 @@ func (rn *raftNode) ElectionTicker(electionTimeout int) {
 			return
 		case <-time.After(dur):
 			role := rn.getRole()
-			if role != raft.Role_Leader {
-				if role != raft.Role_Candidate {
-					rn.setRole(raft.Role_Candidate)
+			if role != raft_pfb.Role_Leader {
+				if role != raft_pfb.Role_Candidate {
+					rn.setRole(raft_pfb.Role_Candidate)
 				} else {
 					rn.stopCurElection <- true
 				}
@@ -505,7 +506,7 @@ func (rn *raftNode) HeartBeatTicker(heartBeatInterval int) {
 			continue
 		case <-time.After(time.Duration(heartBeatInterval) * time.Millisecond):
 			role := rn.getRole()
-			if role == raft.Role_Leader {
+			if role == raft_pfb.Role_Leader {
 				rn.notifyHearBeat <- true
 			}
 		}
@@ -519,13 +520,13 @@ func (rn *raftNode) HeartBeatTicker(heartBeatInterval int) {
 // Params:
 // args: the heartbeat duration
 // reply: no use
-func (rn *raftNode) SetElectionTimeout(ctx context.Context, args *raft.SetElectionTimeoutArgs) (*raft.SetElectionTimeoutReply, error) {
+func (rn *raftNode) SetElectionTimeout(ctx context.Context, args *raft_pfb.SetElectionTimeoutArgs) (*raft_pfb.SetElectionTimeoutReply, error) {
 	// TODO: Implement this!
 	// printf("[%d] reset timeout to %d ms", rn.myId, args.Timeout)
 	rn.stopCurElectionTicker <- true
 	go rn.ElectionTicker(int(args.Timeout))
 
-	var reply raft.SetElectionTimeoutReply
+	var reply raft_pfb.SetElectionTimeoutReply
 	return &reply, nil
 }
 
@@ -536,17 +537,17 @@ func (rn *raftNode) SetElectionTimeout(ctx context.Context, args *raft.SetElecti
 // Params:
 // args: the heartbeat duration
 // reply: no use
-func (rn *raftNode) SetHeartBeatTimeOUT(ctx context.Context, args *raft.SetHeartBeatIntervalArgs) (*raft.SetHeartBeatIntervalReply, error) {
+func (rn *raftNode) SetHeartBeatTimeOUT(ctx context.Context, args *raft_pfb.SetHeartBeatIntervalArgs) (*raft_pfb.SetHeartBeatIntervalReply, error) {
 	// TODO: Implement this!
 	// printf("[%d] reset heartbeat to %d ms", rn.myId, args.Interval)
 	rn.stopCurHeartBeatTicker <- true
 	go rn.HeartBeatTicker(int(args.Interval))
 
-	var reply raft.SetHeartBeatIntervalReply
+	var reply raft_pfb.SetHeartBeatIntervalReply
 	return &reply, nil
 }
 
 // NO NEED TO TOUCH THIS FUNCTION
-func (rn *raftNode) CheckEvents(context.Context, *raft.CheckEventsArgs) (*raft.CheckEventsReply, error) {
+func (rn *raftNode) CheckEvents(context.Context, *raft_pfb.CheckEventsArgs) (*raft_pfb.CheckEventsReply, error) {
 	return nil, nil
 }

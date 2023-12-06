@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func main() {
+func main1() {
 	ports := os.Args[2]
 	myPort, _ := strconv.Atoi(os.Args[1])
 	nodeID, _ := strconv.Atoi(os.Args[3])
@@ -34,9 +34,9 @@ func main() {
 		nodeID, heartBeatInterval, electionTimeout)
 
 	if err != nil {
-		log.Fatalln("Failed to create raft node:", err)
+		log.Fatalln("Failed to create raft_pfb node:", err)
 	}
 
-	// Run the raft node forever.
+	// Run the raft_pfb node forever.
 	select {}
 }

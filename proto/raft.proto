@@ -2,7 +2,7 @@ syntax = "proto3";
 package raft;
 
 // Generate stub by command : protoc pb.proto --go_out=plugins=grpc:.
-option go_package = "/raft";
+option go_package = "/raft_pfb";
 
 service RaftNode{
   rpc Propose(ProposeArgs) returns (ProposeReply);

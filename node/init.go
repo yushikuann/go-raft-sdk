@@ -2,29 +2,30 @@ package node
 
 import (
 	"fmt"
-	"github.com/yushikuann/go-raft-sdk/raft"
-	"google.golang.org/grpc"
 	"log"
 	"net"
 	"os"
 	"time"
+
+	"github.com/yushikuann/go-raft-sdk/proto/raft_pfb"
+	"google.golang.org/grpc"
 )
 
 func NewRaftNode(
 	myPort int,
 	nodeIdPortMap map[int]int,
 	nodeId, heartBeatInterval,
-	electionTimeout int) (raft.RaftNodeServer, error) {
+	electionTimeout int) (raft_pfb.RaftNodeServer, error) {
 
 	delete(nodeIdPortMap, nodeId)
 
 	//a map for {node id, gRPCClient}
-	hostConnectionMap := make(map[int32]raft.RaftNodeClient)
+	hostConnectionMap := make(map[int32]raft_pfb.RaftNodeClient)
 
 	rn := raftNode{
 		peers:                   hostConnectionMap,
 		myId:                    int32(nodeId),
-		role:                    raft.Role_Follower,
+		role:                    raft_pfb.Role_Follower,
 		leaderId:                -1,
 		resetCurElectionTicker:  make(chan bool),
 		stopCurElectionTicker:   make(chan bool),
@@ -39,7 +40,7 @@ func NewRaftNode(
 		stopCurElection:         make(chan bool),
 		waitingOp:               make(map[int32]chan bool),
 	}
-	rn.log = append(rn.log, &raft.LogEntry{Term: 0})
+	rn.log = append(rn.log, &raft_pfb.LogEntry{Term: 0})
 	for i := range rn.nextIndex {
 		rn.nextIndex[i] = rn.getLastLogIndex() + 1
 		rn.matchIndex[i] = 0
@@ -53,7 +54,7 @@ func NewRaftNode(
 	}
 
 	s := grpc.NewServer()
-	raft.RegisterRaftNodeServer(s, &rn)
+	raft_pfb.RegisterRaftNodeServer(s, &rn)
 
 	log.Printf("Start listening to port: %d", myPort)
 	go s.Serve(l)
@@ -68,7 +69,7 @@ func NewRaftNode(
 			log.Printf("Try connecting to port: %d", hostPorts)
 			conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", hostPorts), grpc.WithInsecure(), grpc.WithBlock())
 			//defer conn.Close()
-			client := raft.NewRaftNodeClient(conn)
+			client := raft_pfb.NewRaftNodeClient(conn)
 			if err != nil {
 				log.Println("Fail to connect other nodes. ", err)
 				time.Sleep(1 * time.Second)
